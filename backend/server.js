@@ -11,6 +11,8 @@ const cors    = require('cors');
 const path    = require('path');
 const { initializeSchema } = require('./src/db/schema');
 
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
 // Initialize DB schema on startup
 async function startServer() {
   try {
@@ -30,15 +32,33 @@ app.use(express.urlencoded({ extended: true }));
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
-// API routes
-app.use('/api/dashboard',   require('./src/routes/dashboard'));
-app.use('/api/customers',   require('./src/routes/customers'));
-app.use('/api/motorcycles', require('./src/routes/motorcycles'));
-app.use('/api/rentals',     require('./src/routes/rentals'));
-app.use('/api/payments',    require('./src/routes/payments'));
-app.use('/api/maintenance', require('./src/routes/maintenance'));
-app.use('/api/calendar',    require('./src/routes/calendar'));
-app.use('/api/reports',     require('./src/routes/reports'));
+  // Simple auth gate for all API routes except login
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/auth/login') return next();
+    if (!ADMIN_PASSWORD) return res.status(500).json({ error: 'ADMIN_PASSWORD not configured' });
+    const token = req.header('x-admin-token');
+    if (!token || token !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    return next();
+  });
+
+  app.post('/api/auth/login', (req, res) => {
+    if (!ADMIN_PASSWORD) return res.status(500).json({ error: 'ADMIN_PASSWORD not configured' });
+    const { password } = req.body || {};
+    if (!password || password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
+    return res.json({ ok: true });
+  });
+
+  // API routes
+  app.use('/api/dashboard',   require('./src/routes/dashboard'));
+  app.use('/api/customers',   require('./src/routes/customers'));
+  app.use('/api/motorcycles', require('./src/routes/motorcycles'));
+  app.use('/api/rentals',     require('./src/routes/rentals'));
+  app.use('/api/payments',    require('./src/routes/payments'));
+  app.use('/api/maintenance', require('./src/routes/maintenance'));
+  app.use('/api/calendar',    require('./src/routes/calendar'));
+  app.use('/api/reports',     require('./src/routes/reports'));
 
 // Catch-all: serve frontend for SPA routing
 app.get('/{*path}', (req, res) => {

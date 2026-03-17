@@ -477,6 +477,7 @@ select option { background: var(--surface); }
 .form-row input, .form-row select, .form-row textarea { width: 100%; }
 .form-row textarea { resize: vertical; min-height: 70px; }
 .form-row .hint { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+.hint { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
 .form-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 .form-select-row { display: flex; gap: 0.5rem; align-items: flex-end; }
 .form-select-row select { flex: 1; }

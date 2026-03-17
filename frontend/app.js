@@ -6,6 +6,7 @@
 'use strict';
 
 const API = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) ? window.APP_CONFIG.API_BASE : '/api';
+const AUTH_KEY = 'mr_admin_token';
 
 //  UTILS
 
@@ -21,12 +22,49 @@ const fmt = {
 };
 
 async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem(AUTH_KEY);
+  if (token) headers['x-admin-token'] = token;
+  const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
   const data = await r.json();
+  if (r.status === 401) {
+    localStorage.removeItem(AUTH_KEY);
+    openLoginModal();
+  }
   if (!r.ok) throw new Error(data.error || 'Request failed');
   return data;
+}
+
+function openLoginModal() {
+  const body = `
+    <div class="form-row">
+      <label>Admin Password</label>
+      <input id="login_password" type="password" placeholder="Enter password" />
+    </div>
+    <div class="hint">This protects your data from public access.</div>
+  `;
+  openModal(
+    'Admin Login',
+    body,
+    `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+     <button class="btn btn-primary" onclick="submitLogin()">Login</button>`
+  );
+}
+
+async function submitLogin() {
+  const password = document.getElementById('login_password')?.value || '';
+  if (!password) { toast('Password is required', 'error'); return; }
+  try {
+    await api('POST', '/auth/login', { password });
+    localStorage.setItem(AUTH_KEY, password);
+    closeModal();
+    toast('Login successful', 'success');
+    navigate('dashboard');
+  } catch (e) {
+    toast(e.message || 'Login failed', 'error');
+  }
 }
 
 function toast(msg, type = 'info') {
@@ -1118,6 +1156,7 @@ const pageLoaders = {
 window.editCustomer = editCustomer;
 window.deleteCustomer = deleteCustomer;
 window.showCustomerDetail = showCustomerDetail;
+window.submitLogin = submitLogin;
 window.editMoto = editMoto;
 window.deleteMoto = deleteMoto;
 window.showMotoDetail = showMotoDetail;
@@ -1142,7 +1181,7 @@ window.saveMaint = saveMaint;
 window.closeModal = closeModal;
 
 lucide.createIcons();
-navigate('dashboard');
+openLoginModal();
 
 
 
