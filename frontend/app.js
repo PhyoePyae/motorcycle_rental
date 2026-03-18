@@ -6,6 +6,8 @@
 'use strict';
 
 const API = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) ? window.APP_CONFIG.API_BASE : '/api';
+const GOOGLE_CLIENT_ID = window.APP_CONFIG && window.APP_CONFIG.GOOGLE_CLIENT_ID;
+const AUTH_KEY = 'mr_google_id_token';
 
 //  UTILS
 
@@ -22,12 +24,75 @@ const fmt = {
 
 async function api(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem(AUTH_KEY);
+  if (token) headers.Authorization = `Bearer ${token}`;
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
   const data = await r.json();
+  if (r.status === 401 || r.status === 403) {
+    localStorage.removeItem(AUTH_KEY);
+    openLoginModal();
+  }
   if (!r.ok) throw new Error(data.error || 'Request failed');
   return data;
+}
+
+let googleButtonRendered = false;
+
+function openLoginModal(showError) {
+  const body = `
+    <div class="form-row">
+      <label>Sign in with Google</label>
+      <div id="googleSignInBtn" style="display:flex;justify-content:center;padding:4px 0;"></div>
+      <div class="hint">Login is required to access the dashboard.</div>
+      ${showError ? `<div class="text-danger" style="margin-top:.5rem;font-size:.85rem">Google sign-in failed. Please try again.</div>` : ''}
+    </div>
+  `;
+  openModal(
+    'Admin Login',
+    body,
+    `<button class="btn btn-ghost" onclick="closeModal()">Close</button>`
+  );
+  renderGoogleButton();
+}
+
+function renderGoogleButton() {
+  if (googleButtonRendered) return;
+  if (!GOOGLE_CLIENT_ID) {
+    const el = document.getElementById('googleSignInBtn');
+    if (el) el.innerHTML = '<div class="text-danger">Missing GOOGLE_CLIENT_ID in config.js</div>';
+    return;
+  }
+  if (!window.google || !google.accounts || !google.accounts.id) {
+    setTimeout(renderGoogleButton, 200);
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleCredentialResponse,
+  });
+  const target = document.getElementById('googleSignInBtn');
+  if (target) {
+    google.accounts.id.renderButton(target, { theme: 'filled_blue', size: 'large', shape: 'pill', type: 'standard' });
+    googleButtonRendered = true;
+  }
+}
+
+async function handleCredentialResponse(response) {
+  const idToken = response.credential;
+  if (!idToken) { toast('No credential received', 'error'); return; }
+  try {
+    await api('POST', '/auth/google', { idToken });
+    localStorage.setItem(AUTH_KEY, idToken);
+    closeModal();
+    toast('Signed in with Google', 'success');
+    navigate('dashboard');
+  } catch (e) {
+    localStorage.removeItem(AUTH_KEY);
+    toast(e.message || 'Google sign-in failed', 'error');
+    openLoginModal(true);
+  }
 }
 
 function toast(msg, type = 'info') {
@@ -1116,6 +1181,26 @@ const pageLoaders = {
   reports:     loadReports,
 };
 
+async function bootstrapApp() {
+  lucide.createIcons();
+  if (!GOOGLE_CLIENT_ID) {
+    toast('Missing GOOGLE_CLIENT_ID in config.js', 'error');
+    openLoginModal();
+    return;
+  }
+  const cached = localStorage.getItem(AUTH_KEY);
+  if (cached) {
+    try {
+      await api('POST', '/auth/google', { idToken: cached });
+      navigate('dashboard');
+      return;
+    } catch {
+      localStorage.removeItem(AUTH_KEY);
+    }
+  }
+  openLoginModal();
+}
+
 window.editCustomer = editCustomer;
 window.deleteCustomer = deleteCustomer;
 window.showCustomerDetail = showCustomerDetail;
@@ -1141,9 +1226,9 @@ window.saveRental = saveRental;
 window.savePayment = savePayment;
 window.saveMaint = saveMaint;
 window.closeModal = closeModal;
+window.handleCredentialResponse = handleCredentialResponse;
 
-lucide.createIcons();
-navigate('dashboard');
+bootstrapApp();
 
 
 

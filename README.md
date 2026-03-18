@@ -58,6 +58,8 @@ Set the following environment variables:
 
 - `TURSO_DATABASE_URL` (from Turso)
 - `TURSO_AUTH_TOKEN` (from Turso)
+- `GOOGLE_CLIENT_ID` (OAuth client ID for Google sign-in)
+- `GOOGLE_ALLOWED_EMAILS` *(optional)* comma-separated list of allowed emails
 
 If not set, the app falls back to a local SQLite file at `backend/tayar.db`.
 
@@ -160,6 +162,9 @@ Your site will be live on a Cloudflare Pages URL, and the API will be on Render.
 
 ---
 
-## Security
+## Security (Google Login)
 
-This build currently has no authentication. If you need to restrict access, add your preferred auth (e.g., OAuth provider, JWT, or basic auth at the reverse proxy) before exposing it publicly.
+- Create an OAuth 2.0 Client ID (Web) in Google Cloud and whitelist your production domain (Render + Pages) plus `http://localhost:3001`.
+- Set `GOOGLE_CLIENT_ID` in the backend environment variables.
+- Update `frontend/config.js` with the same client ID and deploy both frontend and backend.
+- (Optional) Set `GOOGLE_ALLOWED_EMAILS` to restrict sign-ins to specific accounts.

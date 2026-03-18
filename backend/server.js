@@ -9,7 +9,37 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const { OAuth2Client } = require('google-auth-library');
 const { initializeSchema } = require('./src/db/schema');
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_ALLOWED_EMAILS = (process.env.GOOGLE_ALLOWED_EMAILS || '')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+async function verifyGoogleToken(idToken) {
+  if (!googleClient) throw new Error('GOOGLE_CLIENT_ID not configured');
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: GOOGLE_CLIENT_ID,
+  });
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) throw new Error('Invalid Google token');
+  const email = payload.email.toLowerCase();
+  if (GOOGLE_ALLOWED_EMAILS.length && !GOOGLE_ALLOWED_EMAILS.includes(email)) {
+    const err = new Error('Email not allowed');
+    err.status = 403;
+    throw err;
+  }
+  return {
+    email,
+    name: payload.name,
+    picture: payload.picture,
+    sub: payload.sub,
+  };
+}
 
 // Initialize DB schema on startup
 async function startServer() {
@@ -29,6 +59,33 @@ async function startServer() {
 
   // Serve frontend static files
   app.use(express.static(path.join(__dirname, '..', 'frontend')));
+
+  // Auth middleware for all API routes except login
+  app.use('/api', async (req, res, next) => {
+    if (req.path === '/auth/google') return next();
+    try {
+      const auth = req.header('Authorization') || '';
+      const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+      if (!token) return res.status(401).json({ error: 'Missing token' });
+      req.user = await verifyGoogleToken(token);
+      return next();
+    } catch (err) {
+      const status = err.status || 401;
+      return res.status(status).json({ error: err.message || 'Unauthorized' });
+    }
+  });
+
+  app.post('/api/auth/google', async (req, res) => {
+    try {
+      const { idToken } = req.body || {};
+      if (!idToken) return res.status(400).json({ error: 'idToken required' });
+      const user = await verifyGoogleToken(idToken);
+      return res.json({ ok: true, user });
+    } catch (err) {
+      const status = err.status || 401;
+      return res.status(status).json({ error: err.message || 'Unauthorized' });
+    }
+  });
 
   // API routes
   app.use('/api/dashboard',   require('./src/routes/dashboard'));
