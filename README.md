@@ -58,7 +58,6 @@ Set the following environment variables:
 
 - `TURSO_DATABASE_URL` (from Turso)
 - `TURSO_AUTH_TOKEN` (from Turso)
-- `ADMIN_PASSWORD` (choose a strong admin password)
 
 If not set, the app falls back to a local SQLite file at `backend/tayar.db`.
 
@@ -161,8 +160,6 @@ Your site will be live on a Cloudflare Pages URL, and the API will be on Render.
 
 ---
 
-## Security (Simple Password Login)
+## Security
 
-All API routes are protected by a single admin password.
-
-Set `ADMIN_PASSWORD` in Render and in local `.env` for development.
+This build currently has no authentication. If you need to restrict access, add your preferred auth (e.g., OAuth provider, JWT, or basic auth at the reverse proxy) before exposing it publicly.
